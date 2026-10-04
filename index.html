@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scam Squad – a satirical call-center game</title>
+<style>
+:root{--bg:#0d1117;--p:#161b22;--g:#3fb950;--r:#f85149;--y:#d29922;--t:#c9d1d9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px/1.4 ui-monospace,Menlo,Consolas,monospace;display:flex;justify-content:center}
+#app{width:100%;max-width:720px;padding:12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;background:var(--p);padding:8px 12px;border-radius:8px;margin-bottom:10px}
+.card{background:var(--p);border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:10px}
+.who{font-size:44px}.meter{height:12px;background:#21262d;border-radius:6px;overflow:hidden;margin:4px 0 8px}
+.meter>div{height:100%;transition:width .3s}#mt{background:var(--g)}#ms{background:var(--r)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{background:#21262d;color:var(--t);border:1px solid #30363d;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--g)}button:disabled{opacity:.4}
+button.go{background:var(--g);color:#000;font-weight:700;grid-column:1/-1}
+#log{min-height:64px;color:var(--y)}#tip{color:#8b949e;font-size:13px}
+#hack{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:9}
+#hack>div{background:var(--r);color:#fff;padding:24px;border-radius:12px;text-align:center}
+#ov{position:fixed;inset:0;background:#0d1117f2;display:flex;align-items:center;justify-content:center;text-align:center;z-index:10;padding:20px}
+#ov>div{max-width:480px}h1{color:var(--g)}small{color:#8b949e}
+</style></head><body><div id="app">
+<div class="bar"><span>📅 Day <b id="day">1</b></span><span>⏱ <b id="time">0</b>s</span><span>💰 $<b id="money">0</b> / $<b id="quota">0</b></span><span>🎧 <b id="pl"></b></span></div>
+<div class="card"><div class="who" id="face"></div><b id="name"></b>
+<div>Trust</div><div class="meter"><div id="mt"></div></div>
+<div>Suspicion</div><div class="meter"><div id="ms"></div></div>
+<div>Info gathered: <b id="data">0</b>/2</div></div>
+<div class="card" id="log"></div>
+<div class="grid" id="acts"></div>
+<p id="tip"></p>
+<div id="hack"><div><h2>🚨 SCAMBAITER HACKING YOU!</h2><button id="hb">KICK THEM OUT</button></div></div>
+<div id="ov"><div id="ovc"></div></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const T={
+ rapport:{n:'💬 Build rapport',t:18,s:3,u:1},
+ urgency:{n:'⏰ Fake urgency',t:26,s:18,u:1},
+ authority:{n:'🏛️ Fake authority',t:22,s:12,u:1},
+ probe:{n:'🔍 "Verify" details',t:10,s:8,u:1,d:1},
+ prize:{n:'🎁 Imaginary prize',t:30,s:14,u:2},
+ guilt:{n:'🥺 Guilt trip',t:28,s:16,u:3}};
+const C=[
+ {e:'👵',n:'Grandma Doris',w:500,m:{rapport:2,prize:1.5,authority:1.2,urgency:.6,guilt:1.4},tip:'Real agencies never demand gift cards or wire transfers.'},
+ {e:'🧑‍💻',n:'Chad the Techbro',w:700,m:{authority:.4,urgency:1.3,rapport:.8,prize:1.2,guilt:.6},tip:'Hang up and call the company back on its official number.'},
+ {e:'👩‍💼',n:'Brenda, Regional Manager',w:600,m:{urgency:1.6,rapport:.7,guilt:.8,prize:.8},tip:'Pressure to act "right now" is the #1 red flag.'},
+ {e:'🧔',n:'Lonely Gary',w:450,m:{rapport:2,guilt:1.8,prize:1.3,urgency:.7,authority:.9},tip:'Be wary of strangers who get very friendly, very fast.'},
+ {e:'🕵️',n:'Totally Normal Guy',w:900,m:{rapport:1,urgency:.5,authority:.5,prize:.5,guilt:.5},scambait:1,tip:'Some "victims" are scambaiters wasting scammers\' time.'}];
+const OK=['"Oh my, tell me more!"','"Hmm, that makes sense..."','"You seem so helpful!"'];
+const NO=['"Wait... that sounds fishy."','"I\'m gonna google this."','"My nephew said not to trust this."'];
+const ME=['"Uh huh... go on."','"Okay, I guess?"'];
+const rnd=a=>a[Math.random()*a.length|0];
+let S;
+function start(n){
+ S={day:1,money:0,total:0,time:75,players:Array.from({length:n},(_,i)=>({n:'P'+(i+1),$:0})),cur:0,call:null,seen:[],run:1};
+ newDay();next();clearInterval(S.iv);S.iv=setInterval(tick,1000);$('ov').style.display='none';
+}
+function quota(){return 400+250*(S.day-1)}
+function newDay(){S.time=75;S.money=0;buildActs();ui()}
+function buildActs(){
+ $('acts').innerHTML='';
+ for(const k in T){if(T[k].u>S.day)continue;const b=document.createElement('button');b.textContent=T[k].n;b.onclick=()=>act(k);$('acts').appendChild(b)}
+ const c=document.createElement('button');c.className='go';c.textContent='💸 CLOSE THE DEAL';c.onclick=close;$('acts').appendChild(c);
+ const h=document.createElement('button');h.textContent='📵 Skip caller';h.onclick=()=>{say('You hang up.');next()};$('acts').appendChild(h);
+}
+function next(){
+ const c=rnd(C);S.call={...c,t:10,s:0,d:0};S.cur=(S.cur+1)%S.players.length;
+ say('☎️ Ring ring... '+c.n+' picks up.');ui();
+}
+function say(m){$('log').innerHTML=m}
+function act(k){
+ const a=T[k],c=S.call,m=c.m[k]??1;
+ c.t=Math.min(100,c.t+a.t*m);c.s=Math.min(100,c.s+a.s*(m<1?1.6:1));
+ if(a.d)c.d++;
+ say((m>=1.4?rnd(OK):m<=.7?rnd(NO):rnd(ME))+(m>=1.4?' 👍 Effective!':m<=.7?' 👎 Poor fit!':''));
+ if(c.s>=100){say('💥 '+c.n+' hung up and reported you! −$50<br><small>'+c.tip+'</small>');S.money=Math.max(0,S.money-50);S.call=null;setTimeout(next,1800)}
+ ui();
+}
+function close(){
+ const c=S.call;
+ if(c.t>=70&&c.d>=2){
+  const g=Math.round(c.w*c.t/100*(c.scambait?0:1));
+  if(c.scambait){say('🪤 It was a scambaiter! They wasted your time. −$100<br><small>'+c.tip+'</small>');S.money=Math.max(0,S.money-100)}
+  else{S.money+=g;S.total+=g;S.players[(S.cur+S.players.length-1)%S.players.length].$+=g;say('💰 Deal closed: +$'+g+'<br><small>Lesson: '+c.tip+'</small>')}
+  S.call=null;ui();setTimeout(next,2000);
+ }else{c.s=Math.min(100,c.s+40);say('😬 Too early! Need Trust ≥ 70 and 2 info.');if(c.s>=100)act('rapport');ui()}
+}
+function tick(){
+ if(!S.run)return;S.time--;
+ if(Math.random()<.05&&$('hack').style.display!=='flex'){
+  $('hack').style.display='flex';S.ht=setTimeout(()=>{$('hack').style.display='none';S.money=Math.max(0,S.money-100);say('🔓 You got hacked! −$100')},3500)}
+ if(S.time<=0){
+  if(S.money>=quota()){S.day++;newDay();say('✅ Quota hit! Day '+S.day+'. New scams unlocked, higher quota.');next()}
+  else end();
+ }
+ ui();
+}
+$('hb').onclick=()=>{clearTimeout(S.ht);$('hack').style.display='none'};
+function end(){
+ S.run=0;clearInterval(S.iv);
+ const best=Math.max(S.day,+localStorage.getItem('ss_best')||0);try{localStorage.setItem('ss_best',best)}catch(e){}
+ $('ovc').innerHTML='<h1>🔥 YOU\'RE FIRED!</h1><p>The boss is furious. You survived to Day '+S.day+'.<br>Best: Day '+best+'</p><p>'+S.players.map(p=>p.n+': $'+p.$).join(' · ')+'</p><button onclick="menu()">Back to menu</button>';
+ $('ov').style.display='flex';
+}
+function menu(){
+ $('ovc').innerHTML='<h1>☎️ SCAM SQUAD</h1><p>You run a (very fictional) scam call center under a ruthless boss. Hit the daily quota or get fired!</p><p><small>A satire to teach red flags. After each call you\'ll see the lesson the victim should have learned.</small></p><p>Players sharing one keyboard (pass the headset!):</p><button onclick="start(1)">1</button> <button onclick="start(2)">2</button> <button onclick="start(3)">3</button> <button onclick="start(4)">4</button>';
+ $('ov').style.display='flex';
+}
+function ui(){
+ $('day').textContent=S.day;$('time').textContent=S.time;$('money').textContent=S.money;$('quota').textContent=quota();
+ $('pl').textContent=S.players.map((p,i)=>(i===S.cur?'▶':'')+p.n).join(' ');
+ const c=S.call;if(!c)return;
+ $('face').textContent=c.e;$('name').textContent=c.n;$('mt').style.width=c.t+'%';$('ms').style.width=c.s+'%';$('data').textContent=c.d;
+ $('tip').textContent='Tip: each caller reacts differently to each tactic.';
+}
+menu();
+</script></body></html>
